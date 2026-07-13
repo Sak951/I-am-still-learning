@@ -1,0 +1,22 @@
+# configs/finetune_config.yaml
+vocab_size: 32000
+block_size: 512
+n_embd: 768
+n_head: 12
+n_layer: 12
+dropout: 0.1
+bias: true
+learning_rate: 0.00003  # 10x lower for fine-tuning
+weight_decay: 0.01
+betas: [0.9, 0.95]
+grad_clip: 1.0
+warmup_steps: 200
+gradient_accumulation_steps: 1
+batch_size: 16  # Smaller batch for fine-tuning
+epochs: 3
+save_every: 1
+eval_every: 100
+output_dir: "checkpoints/finetuned"
+data_dir: "data/processed"
+device: "cuda"
+dtype: "bfloat16"

@@ -1,0 +1,380 @@
+# scripts/web_demo.py
+import torch
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from flask import Flask, request, jsonify, render_template_string
+import argparse
+import torch.nn.functional as F
+
+app = Flask(__name__)
+
+# Global generator
+generator = None
+
+class WebGenerator:
+    def __init__(self, checkpoint_path, device='cuda'):
+        print(f"Loading model from {checkpoint_path}...")
+        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+        self.config = checkpoint['config']
+        
+        from src.model.transformer import ToyLLM
+        from src.utils.tokenizer import SimpleTokenizer
+        
+        self.model = ToyLLM(self.config)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model = self.model.to(device)
+        self.model.eval()
+        
+        self.tokenizer = SimpleTokenizer(tokenizer_type="gpt2")
+        self.device = device
+        
+        print(f"Model loaded with {self.model.get_num_params():,} parameters")
+    
+    @torch.no_grad()
+    def generate(self, prompt, max_length=150, temperature=0.8, top_k=50, top_p=0.95):
+        input_ids = torch.tensor([self.tokenizer.encode(prompt)]).to(self.device)
+        
+        for _ in range(max_length):
+            logits, _ = self.model(input_ids)
+            logits = logits[:, -1, :] / temperature
+            
+            if top_k > 0:
+                indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+                logits[indices_to_remove] = float('-inf')
+            
+            if top_p < 1.0:
+                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                sorted_indices_to_remove = cumulative_probs > top_p
+                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                sorted_indices_to_remove[..., 0] = 0
+                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                logits[indices_to_remove] = float('-inf')
+            
+            probs = F.softmax(logits, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+            input_ids = torch.cat([input_ids, next_token], dim=1)
+            
+            if next_token.item() == self.tokenizer.eos_token_id:
+                break
+        
+        return self.tokenizer.decode(input_ids[0].tolist())
+
+# HTML Template
+HTML_TEMPLATE = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Toy LLM Text Generator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .control-group label {
+            font-size: 14px;
+            color: #555;
+        }
+        input[type="range"] {
+            width: 150px;
+        }
+        input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .output {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            white-space: pre-wrap;
+            font-family: monospace;
+            line-height: 1.5;
+        }
+        .loading {
+            display: none;
+            color: #666;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            margin-top: 10px;
+        }
+        .example-prompts {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 5px;
+        }
+        .example-prompts h3 {
+            margin-top: 0;
+            font-size: 14px;
+            color: #555;
+        }
+        .example {
+            display: inline-block;
+            background: white;
+            padding: 5px 10px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            border: 1px solid #ddd;
+        }
+        .example:hover {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .stats {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 I am still learning LLM Text Generator</h1>
+        <div class="subtitle">A 30M parameter language model trained on textbook data</div>
+        
+        <form id="generate-form">
+            <textarea id="prompt" rows="4" placeholder="Enter your prompt here... e.g., The benefits of renewable energy include"></textarea>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label>Temperature:</label>
+                    <input type="range" id="temperature" min="0.5" max="1.5" step="0.05" value="0.8">
+                    <span id="temp-value">0.80</span>
+                </div>
+                <div class="control-group">
+                    <label>Max Length:</label>
+                    <input type="number" id="max-length" min="50" max="300" value="150">
+                </div>
+                <div class="control-group">
+                    <label>Top-K:</label>
+                    <input type="number" id="top-k" min="0" max="100" value="50">
+                </div>
+                <div class="control-group">
+                    <label>Top-P:</label>
+                    <input type="range" id="top-p" min="0.5" max="1.0" step="0.01" value="0.95">
+                    <span id="top-p-value">0.95</span>
+                </div>
+            </div>
+            
+            <button type="submit">Generate Text</button>
+        </form>
+        
+        <div id="loading" class="loading">Generating... This may take a few seconds.</div>
+        <div id="error" class="error"></div>
+        
+        <div id="output" class="output" style="display:none;"></div>
+        
+        <div class="example-prompts">
+            <h3>📝 Example Prompts (click to try):</h3>
+            <div class="example" data-prompt="The benefits of renewable energy include">🌱 Renewable energy</div>
+            <div class="example" data-prompt="Machine learning algorithms work by">🤖 Machine learning</div>
+            <div class="example" data-prompt="The process of photosynthesis involves">🌿 Photosynthesis</div>
+            <div class="example" data-prompt="Climate change mitigation strategies include">🌍 Climate change</div>
+            <div class="example" data-prompt="The advantages of cloud computing are">☁️ Cloud computing</div>
+            <div class="example" data-prompt="Artificial intelligence can be used for">🧠 AI applications</div>
+        </div>
+        
+        <div class="stats">
+            ⚡ Model: 30M parameters | Trained on textbook data | Overfitting warning: may repeat phrases
+        </div>
+    </div>
+    
+    <script>
+        // Update temperature display
+        const tempSlider = document.getElementById('temperature');
+        const tempValue = document.getElementById('temp-value');
+        tempSlider.oninput = () => tempValue.textContent = parseFloat(tempSlider.value).toFixed(2);
+        
+        const topPSlider = document.getElementById('top-p');
+        const topPValue = document.getElementById('top-p-value');
+        topPSlider.oninput = () => topPValue.textContent = parseFloat(topPSlider.value).toFixed(2);
+        
+        // Handle form submission
+        const form = document.getElementById('generate-form');
+        const outputDiv = document.getElementById('output');
+        const loadingDiv = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            
+            const prompt = document.getElementById('prompt').value.trim();
+            if (!prompt) {
+                errorDiv.textContent = 'Please enter a prompt';
+                return;
+            }
+            
+            // Hide previous output, show loading
+            outputDiv.style.display = 'none';
+            loadingDiv.style.display = 'block';
+            errorDiv.textContent = '';
+            
+            const data = {
+                prompt: prompt,
+                temperature: parseFloat(tempSlider.value),
+                max_length: parseInt(document.getElementById('max-length').value),
+                top_k: parseInt(document.getElementById('top-k').value),
+                top_p: parseFloat(topPSlider.value)
+            };
+            
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                outputDiv.textContent = result.generated_text;
+                outputDiv.style.display = 'block';
+            } catch (err) {
+                errorDiv.textContent = 'Error: ' + err.message;
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        };
+        
+        // Handle example clicks
+        document.querySelectorAll('.example').forEach(el => {
+            el.onclick = () => {
+                document.getElementById('prompt').value = el.dataset.prompt;
+                form.dispatchEvent(new Event('submit'));
+            };
+        });
+    </script>
+</body>
+</html>
+'''
+
+@app.route('/')
+def home():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    try:
+        # Get JSON data
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+        
+        prompt = data.get('prompt', '')
+        if not prompt:
+            return jsonify({'error': 'No prompt provided'}), 400
+        
+        temperature = data.get('temperature', 0.8)
+        max_length = data.get('max_length', 150)
+        top_k = data.get('top_k', 50)
+        top_p = data.get('top_p', 0.95)
+        
+        # Generate text
+        generated = generator.generate(
+            prompt,
+            max_length=max_length,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p
+        )
+        
+        return jsonify({'generated_text': generated})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'healthy', 'model_loaded': generator is not None})
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--checkpoint', type=str, required=True)
+    parser.add_argument('--port', type=int, default=5000)
+    parser.add_argument('--host', type=str, default='127.0.0.1')
+    args = parser.parse_args()
+    
+    global generator
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    generator = WebGenerator(args.checkpoint, device)
+    
+    print(f"\n✨ Web demo running at http://{args.host}:{args.port}")
+    print("Press CTRL+C to stop\n")
+    
+    app.run(debug=True, host=args.host, port=args.port)
+
+if __name__ == '__main__':
+    main()

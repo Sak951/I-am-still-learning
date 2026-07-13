@@ -1,0 +1,16 @@
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# Local model checkpoints and Hugging Face export directory
+checkpoints/
+hf_models/
+
+# Raw and processed datasets
+data/
+
+# Scratch and log files
+scratch/
+.system_generated/
+*.log
