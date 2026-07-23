@@ -5,3 +5,4 @@ torch
 flask>=2.2.0
 gunicorn>=20.1.0
 tiktoken
+pyyaml>=6.0

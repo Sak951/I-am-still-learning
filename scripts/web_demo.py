@@ -43,12 +43,72 @@ class WebGenerator:
             print(f"Loading model from {checkpoint_path}...")
             checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False, mmap=True)
             
-        self.config = checkpoint['config']
+        # Check if the loaded checkpoint is a full checkpoint dictionary or weights-only state_dict
+        is_full_checkpoint = isinstance(checkpoint, dict) and 'config' in checkpoint and 'model_state_dict' in checkpoint
+        
+        if is_full_checkpoint:
+            self.config = checkpoint['config']
+            state_dict = checkpoint['model_state_dict']
+        else:
+            # It is a weights-only state dict (e.g. pytorch_model.bin)
+            state_dict = checkpoint
+            
+            # Resolve config
+            config_loaded = False
+            # Option A: If downloaded from URL, we can fetch config.json from HF
+            if checkpoint_path.endswith("downloaded_model.pt") and os.environ.get("CHECKPOINT_PATH"):
+                checkpoint_url = os.environ.get("CHECKPOINT_PATH")
+                if "pytorch_model.bin" in checkpoint_url:
+                    config_url = checkpoint_url.replace("pytorch_model.bin", "config.json")
+                    try:
+                        print(f"Fetching remote model configuration from {config_url}...")
+                        import json
+                        req_config = urllib.request.Request(config_url)
+                        hf_token = os.environ.get("HF_TOKEN")
+                        if hf_token:
+                            req_config.add_header("Authorization", f"Bearer {hf_token}")
+                        with urllib.request.urlopen(req_config) as response:
+                            config_data = json.loads(response.read().decode())
+                        
+                        from src.model.config import ModelConfig
+                        self.config = ModelConfig(
+                            vocab_size=config_data.get("vocab_size", 50257),
+                            block_size=config_data.get("max_position_embeddings", 1024),
+                            n_embd=config_data.get("hidden_size", 768),
+                            n_head=config_data.get("num_attention_heads", 12),
+                            n_layer=config_data.get("num_hidden_layers", 12),
+                            dropout=config_data.get("hidden_dropout_prob", 0.1)
+                        )
+                        config_loaded = True
+                        print("Successfully loaded remote configuration.")
+                    except Exception as config_err:
+                        print(f"Failed to fetch remote config: {config_err}")
+            
+            # Option B: Fallback to base_config.yaml locally
+            if not config_loaded:
+                try:
+                    import yaml
+                    from src.model.config import ModelConfig
+                    config_path = "configs/base_config.yaml"
+                    print(f"Loading fallback config from {config_path}...")
+                    with open(config_path, 'r') as f:
+                        yaml_config = yaml.safe_load(f)
+                    model_params = yaml_config.get("model", {})
+                    self.config = ModelConfig(
+                        vocab_size=model_params.get("vocab_size", 50257),
+                        block_size=model_params.get("block_size", 1024),
+                        n_embd=model_params.get("n_embd", 768),
+                        n_head=model_params.get("n_head", 12),
+                        n_layer=model_params.get("n_layer", 12),
+                        dropout=model_params.get("dropout", 0.1)
+                    )
+                    config_loaded = True
+                except Exception as fallback_err:
+                    print(f"Failed to load fallback config: {fallback_err}")
+                    raise ValueError("Could not load configuration for weights-only model.")
         
         from src.model.transformer import ToyLLM
         from src.utils.tokenizer import SimpleTokenizer
-        
-        state_dict = checkpoint['model_state_dict']
         if device == 'cpu':
             print("Converting weights to bfloat16 for CPU memory savings...")
             for k in list(state_dict.keys()):
