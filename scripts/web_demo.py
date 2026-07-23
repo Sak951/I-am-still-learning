@@ -37,11 +37,11 @@ class WebGenerator:
                     out_file.write(chunk)
                     
             print("Download completed. Loading checkpoint...")
-            checkpoint = torch.load(local_path, map_location='cpu', weights_only=False)
+            checkpoint = torch.load(local_path, map_location='cpu', weights_only=False, mmap=True)
             checkpoint_path = local_path
         else:
             print(f"Loading model from {checkpoint_path}...")
-            checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+            checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False, mmap=True)
             
         self.config = checkpoint['config']
         
@@ -53,7 +53,8 @@ class WebGenerator:
             print("Converting weights to bfloat16 for CPU memory savings...")
             for k in list(state_dict.keys()):
                 if state_dict[k].dtype == torch.float32:
-                    state_dict[k] = state_dict[k].to(torch.bfloat16)
+                    # clone() ensures we allocate clean RAM for the bfloat16 weights
+                    state_dict[k] = state_dict[k].to(torch.bfloat16).clone()
         
         self.model = ToyLLM(self.config)
         if device == 'cpu':
