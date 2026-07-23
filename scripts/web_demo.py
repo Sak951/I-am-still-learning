@@ -17,11 +17,21 @@ class WebGenerator:
     def __init__(self, checkpoint_path, device='cuda'):
         if checkpoint_path.startswith("http://") or checkpoint_path.startswith("https://"):
             import urllib.request
+            import shutil
             local_dir = "checkpoints"
             local_path = os.path.join(local_dir, "downloaded_model.pt")
             print(f"Downloading checkpoint from {checkpoint_path} to {local_path}...")
             os.makedirs(local_dir, exist_ok=True)
-            urllib.request.urlretrieve(checkpoint_path, local_path)
+            
+            # Setup request headers
+            req = urllib.request.Request(checkpoint_path)
+            hf_token = os.environ.get("HF_TOKEN")
+            if hf_token:
+                req.add_header("Authorization", f"Bearer {hf_token}")
+                print("Using Authorization header for private repository download...")
+                
+            with urllib.request.urlopen(req) as response, open(local_path, 'wb') as out_file:
+                shutil.copyfileobj(response, out_file)
             checkpoint_path = local_path
             
         print(f"Loading model from {checkpoint_path}...")
