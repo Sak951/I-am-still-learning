@@ -15,59 +15,30 @@ generator = None
 
 class WebGenerator:
     def __init__(self, checkpoint_path, device='cuda'):
+        checkpoint = None
+        
         if checkpoint_path.startswith("http://") or checkpoint_path.startswith("https://"):
-            local_dir = "checkpoints"
-            os.makedirs(local_dir, exist_ok=True)
+            import urllib.request
+            import io
             
-            if "huggingface.co" in checkpoint_path:
-                try:
-                    # Parse Hugging Face URL: https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/pytorch_model.bin
-                    parts = checkpoint_path.split("huggingface.co/")[1].split("/")
-                    if len(parts) >= 5:
-                        repo_id = f"{parts[0]}/{parts[1]}"
-                        revision = parts[3]
-                        filename = "/".join(parts[4:])
-                        print(f"Detected Hugging Face URL. Repo: {repo_id}, Revision: {revision}, File: {filename}")
-                        
-                        from huggingface_hub import hf_hub_download
-                        token = os.environ.get("HF_TOKEN")
-                        local_path = hf_hub_download(
-                            repo_id=repo_id,
-                            filename=filename,
-                            revision=revision,
-                            token=token,
-                            local_dir=local_dir,
-                            local_dir_use_symlinks=False
-                        )
-                        checkpoint_path = local_path
-                        print(f"Successfully downloaded weights via HF API to {checkpoint_path}")
-                    else:
-                        raise ValueError("Unexpected Hugging Face URL structure")
-                except Exception as hf_err:
-                    print(f"HF Hub download failed: {hf_err}. Falling back to urllib...")
-                    # Fallback to urllib
-                    import urllib.request
-                    import shutil
-                    local_path = os.path.join(local_dir, "downloaded_model.pt")
-                    req = urllib.request.Request(checkpoint_path)
-                    hf_token = os.environ.get("HF_TOKEN")
-                    if hf_token:
-                        req.add_header("Authorization", f"Bearer {hf_token}")
-                    with urllib.request.urlopen(req) as response, open(local_path, 'wb') as out_file:
-                        shutil.copyfileobj(response, out_file)
-                    checkpoint_path = local_path
-            else:
-                import urllib.request
-                import shutil
-                local_path = os.path.join(local_dir, "downloaded_model.pt")
-                print(f"Downloading checkpoint from {checkpoint_path} to {local_path}...")
-                req = urllib.request.Request(checkpoint_path)
-                with urllib.request.urlopen(req) as response, open(local_path, 'wb') as out_file:
-                    shutil.copyfileobj(response, out_file)
-                checkpoint_path = local_path
+            print(f"Downloading checkpoint from {checkpoint_path} directly into memory...")
+            req = urllib.request.Request(checkpoint_path)
+            hf_token = os.environ.get("HF_TOKEN")
+            if hf_token:
+                req.add_header("Authorization", f"Bearer {hf_token}")
+                
+            with urllib.request.urlopen(req) as response:
+                buffer = io.BytesIO(response.read())
+                
+            print("Download completed. Loading checkpoint...")
+            checkpoint = torch.load(buffer, map_location='cpu', weights_only=False)
+            del buffer
+            import gc
+            gc.collect()
+        else:
+            print(f"Loading model from {checkpoint_path}...")
+            checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
             
-        print(f"Loading model from {checkpoint_path}...")
-        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         self.config = checkpoint['config']
         
         from src.model.transformer import ToyLLM
