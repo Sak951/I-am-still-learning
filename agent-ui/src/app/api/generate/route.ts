@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:5000";
+    let backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:5000";
+    if (!backendUrl.startsWith("http://") && !backendUrl.startsWith("https://")) {
+      backendUrl = `http://${backendUrl}`;
+    }
     
     // Proxy request to Flask web_demo.py server
     const response = await fetch(`${backendUrl}/generate`, {
