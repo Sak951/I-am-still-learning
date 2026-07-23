@@ -13,7 +13,7 @@ services:
     envVars:
       # Pass the model checkpoint path or a download URL (http/https) here
       - key: CHECKPOINT_PATH
-        value: "https://huggingface.co/Sak951/I-am-still-learning/resolve/main/pytorch_model.bin" # fallback placeholder or actual hub path
+        value: "https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/pytorch_model.bin" # fallback placeholder or actual hub path
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: PORT

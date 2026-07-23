@@ -21,12 +21,12 @@ Because model checkpoints are too large for GitHub (over 300MB) and are excluded
    pip install huggingface_hub
    huggingface-cli login
    ```
-2. Run the provided upload script to convert and push your best model weights (`checkpoints/best_model.pt`) to your Hugging Face repository (`Sak951/I-am-still-learning`):
+2. Run the provided upload script to convert and push your best model weights (`checkpoints/best_model.pt`) to your Hugging Face repository (`Sak2004/I-am-still-learning`):
    ```bash
-   python scripts/upload_to_hub.py --checkpoint checkpoints/best_model.pt --model_name I-am-still-learning --username Sak951
+   python scripts/upload_to_hub.py --checkpoint checkpoints/best_model.pt --model_name I-am-still-learning --username Sak2004
    ```
 3. Once uploaded, copy the direct download link for the model weights file (usually `pytorch_model.bin`). The link format will look like:
-   `https://huggingface.co/Sak951/I-am-still-learning/resolve/main/pytorch_model.bin`
+   `https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/pytorch_model.bin`
 
 ---
 
@@ -40,7 +40,7 @@ Render's Blueprints read the `render.yaml` file in your repository root and auto
 4. Name your Blueprint instance (e.g. `learn-os-deployment`).
 5. Under **Environment Variables**, confirm or edit the `CHECKPOINT_PATH`:
    * **Key**: `CHECKPOINT_PATH`
-   * **Value**: Set this to the Hugging Face resolve URL copied in Step 1 (e.g., `https://huggingface.co/Sak951/I-am-still-learning/resolve/main/pytorch_model.bin`).
+   * **Value**: Set this to the Hugging Face resolve URL copied in Step 1 (e.g., `https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/pytorch_model.bin`).
 6. Click **Approve** / **Deploy**.
 
 ---
