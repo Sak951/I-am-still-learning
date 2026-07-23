@@ -38,9 +38,11 @@ Render's Blueprints read the `render.yaml` file in your repository root and auto
 2. Click **New +** at the top right and select **Blueprint**.
 3. Connect your GitHub repository containing this project.
 4. Name your Blueprint instance (e.g. `learn-os-deployment`).
-5. Under **Environment Variables**, confirm or edit the `CHECKPOINT_PATH`:
+5. Under **Environment Variables**, confirm or edit the `CHECKPOINT_PATH` and optionally set `HF_TOKEN`:
    * **Key**: `CHECKPOINT_PATH`
    * **Value**: Set this to the Hugging Face resolve URL copied in Step 1 (e.g., `https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/pytorch_model.bin`).
+   * **Key**: `HF_TOKEN` (**Required if your Hugging Face repository is Private**)
+   * **Value**: Your Hugging Face Read-only Access Token (generate one from your Hugging Face Account Settings > Access Tokens).
 6. Click **Approve** / **Deploy**.
 
 ---
