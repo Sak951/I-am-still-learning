@@ -1,0 +1,193 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Source Serif 4", serif;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-brand-purple: #7C3AED;
+  --color-brand-blue: #3B82F6;
+  --color-brand-emerald: #10B981;
+  
+  --color-paper: #EAEBE3;
+  --color-ink: #17181A;
+  --color-red-ink: #B23B2E;
+  --color-blue-ink: #2E4C82;
+  --color-line: #D3D4C6;
+  
+  --animate-shimmer: shimmer 2.5s infinite linear;
+  --animate-float: float 6s ease-in-out infinite;
+  
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-6px); }
+  }
+}
+
+:root {
+  --paper: #EAEBE3;
+  --ink: #17181A;
+  --red: #B23B2E;
+  --blue: #2E4C82;
+  --line: #D3D4C6;
+  
+  /* Next.js app variables override */
+  --bg-app: #EAEBE3;
+  --bg-sidebar: #F0F1E8;
+  --bg-card: #ffffff;
+  --text-main: #17181A;
+  --text-muted: #4B4D52;
+  --text-inactive: #8A8B80;
+  --border-muted: #D3D4C6;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Selection Highlight */
+::selection {
+  background: var(--red);
+  color: var(--paper);
+}
+
+/* Disable default cursor on larger viewports when crosshair is enabled */
+@media (min-width: 860px) {
+  .lab-cursor-active, 
+  .lab-cursor-active * {
+    cursor: none !important;
+  }
+}
+
+/* Custom lab cursor crosshair styling */
+.cursor-x {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  pointer-events: none;
+  display: none;
+}
+
+@media (min-width: 860px) {
+  .cursor-x {
+    display: block;
+  }
+}
+
+.cursor-x svg line {
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+
+.cursor-tag {
+  position: absolute;
+  left: 26px;
+  top: 4px;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--red);
+  background: var(--paper);
+  padding: 2px 6px;
+  border: 1px solid var(--red);
+  border-radius: 2px;
+}
+
+/* Faint graph-paper pattern background */
+.hero-grid {
+  position: absolute;
+  inset: -10% -5%;
+  background-image: 
+    linear-gradient(var(--line) 1px, transparent 1px), 
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 46px 46px;
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+/* Preloader styling */
+.preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.preloader-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.preloader-mark {
+  font-family: 'Source Serif 4', serif;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.preloader-pct {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--red);
+}
+
+.preloader-bar {
+  width: 260px;
+  height: 2px;
+  background: var(--line);
+  position: relative;
+  overflow: hidden;
+}
+
+.preloader-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--red);
+}
+
+.preloader-caption {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8A897A;
+  letter-spacing: 0.04em;
+}
+
+/* Custom Scrollbars to match lab paper aesthetic */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--paper);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B4B5A6;
+}
+

@@ -162,8 +162,8 @@ class Trainer:
         
         return avg_loss
     
-    def train(self, epochs):
-        for epoch in range(epochs):
+    def train(self, epochs, start_epoch=0):
+        for epoch in range(start_epoch, epochs):
             print(f"\nEpoch {epoch + 1}/{epochs}")
             train_loss = self.train_epoch()
             
@@ -183,6 +183,16 @@ class Trainer:
             # Clear GPU cache if using CUDA
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                
+    def load_checkpoint(self, checkpoint_path):
+        print(f"Loading training state from {checkpoint_path}...")
+        checkpoint = torch.load(checkpoint_path, map_location=self.config.device)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        self.global_step = checkpoint.get('global_step', (checkpoint['epoch'] + 1) * len(self.train_loader))
+        self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+        return checkpoint['epoch'] + 1
     
     def save_checkpoint(self, epoch, is_best=False):
         checkpoint = {

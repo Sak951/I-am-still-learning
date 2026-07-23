@@ -26,6 +26,8 @@ def main():
                         help="Wandb project name")
     parser.add_argument("--wandb-run", type=str, default=None,
                         help="Wandb run name")
+    parser.add_argument("--resume-checkpoint", type=str, default=None,
+                        help="Path to checkpoint to resume training from")
     args = parser.parse_args()
     
     # Initialize wandb if requested
@@ -96,10 +98,16 @@ def main():
     # Initialize trainer
     trainer = Trainer(model, config, train_loader, val_loader, use_wandb=args.wandb)
     
+    # Resume checkpoint if provided
+    start_epoch = 0
+    if args.resume_checkpoint:
+        start_epoch = trainer.load_checkpoint(args.resume_checkpoint)
+        print(f"Resuming training from epoch {start_epoch + 1}...")
+    
     # Train
-    print(f"Starting training for {config.epochs} epochs...")
+    print(f"Training parameters: total {config.epochs} epochs, starting from epoch {start_epoch + 1}")
     print(f"Total training steps: {len(train_loader) * config.epochs:,}")
-    trainer.train(config.epochs)
+    trainer.train(config.epochs, start_epoch=start_epoch)
     
     # Finish wandb
     if args.wandb:

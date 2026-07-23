@@ -15,6 +15,15 @@ generator = None
 
 class WebGenerator:
     def __init__(self, checkpoint_path, device='cuda'):
+        if checkpoint_path.startswith("http://") or checkpoint_path.startswith("https://"):
+            import urllib.request
+            local_dir = "checkpoints"
+            local_path = os.path.join(local_dir, "downloaded_model.pt")
+            print(f"Downloading checkpoint from {checkpoint_path} to {local_path}...")
+            os.makedirs(local_dir, exist_ok=True)
+            urllib.request.urlretrieve(checkpoint_path, local_path)
+            checkpoint_path = local_path
+            
         print(f"Loading model from {checkpoint_path}...")
         checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         self.config = checkpoint['config']
@@ -33,12 +42,22 @@ class WebGenerator:
         print(f"Model loaded with {self.model.get_num_params():,} parameters")
     
     @torch.no_grad()
-    def generate(self, prompt, max_length=150, temperature=0.8, top_k=50, top_p=0.95):
+    def generate(self, prompt, max_length=150, temperature=0.8, top_k=50, top_p=0.95, repetition_penalty=1.25):
         input_ids = torch.tensor([self.tokenizer.encode(prompt)]).to(self.device)
         
         for _ in range(max_length):
             logits, _ = self.model(input_ids)
             logits = logits[:, -1, :] / temperature
+            
+            # Apply repetition penalty to break infinite loops
+            if repetition_penalty != 1.0:
+                generated_tokens = set(input_ids[0].tolist())
+                for token_id in generated_tokens:
+                    val = logits[0, token_id].item()
+                    if val > 0:
+                        logits[0, token_id] /= repetition_penalty
+                    else:
+                        logits[0, token_id] *= repetition_penalty
             
             if top_k > 0:
                 indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
@@ -320,6 +339,12 @@ HTML_TEMPLATE = '''
 </html>
 '''
 
+# Auto-initialize if running under WSGI (like Gunicorn)
+env_checkpoint = os.environ.get("CHECKPOINT_PATH")
+if env_checkpoint:
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    generator = WebGenerator(env_checkpoint, device)
+
 @app.route('/')
 def home():
     return render_template_string(HTML_TEMPLATE)
@@ -341,6 +366,7 @@ def generate():
         max_length = data.get('max_length', 150)
         top_k = data.get('top_k', 50)
         top_p = data.get('top_p', 0.95)
+        repetition_penalty = data.get('repetition_penalty', 1.25)
         
         # Generate text
         generated = generator.generate(
@@ -348,7 +374,8 @@ def generate():
             max_length=max_length,
             temperature=temperature,
             top_k=top_k,
-            top_p=top_p
+            top_p=top_p,
+            repetition_penalty=repetition_penalty
         )
         
         return jsonify({'generated_text': generated})

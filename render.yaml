@@ -1,0 +1,35 @@
+# render.yaml
+# Render Blueprint Specification for deploying the Learn OS application.
+# Learn more at https://render.com/docs/blueprints
+
+services:
+  # 1. Python Flask Model Backend Service
+  - type: web
+    name: learn-model-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    # Render maps port automatically using the PORT env variable
+    startCommand: gunicorn scripts.web_demo:app --bind 0.0.0.0:$PORT --timeout 120
+    envVars:
+      # Pass the model checkpoint path or a download URL (http/https) here
+      - key: CHECKPOINT_PATH
+        value: "https://huggingface.co/Sak951/I-am-still-learning/resolve/main/pytorch_model.bin" # fallback placeholder or actual hub path
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PORT
+        value: "10000"
+
+  # 2. Next.js Frontend Dashboard Service
+  - type: web
+    name: learn-frontend
+    env: node
+    # Build from subfolder
+    buildCommand: cd agent-ui && npm install && npm run build
+    startCommand: cd agent-ui && npm start
+    envVars:
+      # Inject the backend URL automatically from the linked backend service
+      - key: BACKEND_URL
+        fromService:
+          type: web
+          name: learn-model-backend
+          property: url

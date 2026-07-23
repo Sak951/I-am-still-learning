@@ -52,9 +52,10 @@ class DataFetcher:
         return self._prepare_and_save(texts, "slim-pajama-sample")
     
     def fetch_wikipedia(self, lang="en", max_articles=10000):
-        """Fetch Wikipedia articles"""
-        print(f"Fetching Wikipedia ({lang})...")
-        dataset = load_dataset("wikipedia", f"20220301.{lang}", split="train")
+        """Fetch Wikipedia articles (using wikimedia/wikipedia to bypass Hub namespace checks)"""
+        print(f"Fetching Wikipedia (wikimedia/wikipedia)...")
+        # Use namespace to bypass huggingface_hub URI parser bugs on single-word datasets
+        dataset = load_dataset("wikimedia/wikipedia", "20231101.en", split="train")
         
         if max_articles:
             dataset = dataset.select(range(min(max_articles, len(dataset))))
