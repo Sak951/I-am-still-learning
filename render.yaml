@@ -7,6 +7,7 @@ services:
   - type: web
     name: learn-model-backend
     env: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     # Render maps port automatically using the PORT env variable
     startCommand: gunicorn scripts.web_demo:app --bind 0.0.0.0:$PORT --timeout 120
@@ -23,6 +24,7 @@ services:
   - type: web
     name: learn-frontend
     env: node
+    plan: free
     # Build from subfolder
     buildCommand: cd agent-ui && npm install && npm run build
     startCommand: cd agent-ui && npm start
