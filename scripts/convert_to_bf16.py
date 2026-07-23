@@ -15,7 +15,7 @@ def main():
         return
         
     print(f"🔄 Loading checkpoint from {input_path}...")
-    checkpoint = torch.load(input_path, map_location="cpu")
+    checkpoint = torch.load(input_path, map_location="cpu", weights_only=False)
     
     print("⚡ Converting all floating-point model weights to bfloat16 precision...")
     state_dict = checkpoint["model_state_dict"]
