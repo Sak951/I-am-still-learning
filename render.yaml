@@ -9,8 +9,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    # Render maps port automatically using the PORT env variable
-    startCommand: gunicorn scripts.web_demo:app --bind 0.0.0.0:$PORT --timeout 120
+    startCommand: gunicorn scripts.web_demo:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
     envVars:
       # Pass the model checkpoint path or a download URL (http/https) here
       - key: CHECKPOINT_PATH

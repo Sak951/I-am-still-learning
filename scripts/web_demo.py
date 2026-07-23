@@ -73,10 +73,26 @@ class WebGenerator:
         from src.model.transformer import ToyLLM
         from src.utils.tokenizer import SimpleTokenizer
         
+        state_dict = checkpoint['model_state_dict']
+        if device == 'cpu':
+            print("Converting weights to bfloat16 for CPU memory savings...")
+            for k in list(state_dict.keys()):
+                if state_dict[k].dtype == torch.float32:
+                    state_dict[k] = state_dict[k].to(torch.bfloat16)
+        
         self.model = ToyLLM(self.config)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        if device == 'cpu':
+            self.model = self.model.to(dtype=torch.bfloat16)
+            
+        self.model.load_state_dict(state_dict)
         self.model = self.model.to(device)
         self.model.eval()
+        
+        # Free memory immediately
+        del state_dict
+        del checkpoint
+        import gc
+        gc.collect()
         
         self.tokenizer = SimpleTokenizer(tokenizer_type="gpt2")
         self.device = device
@@ -89,7 +105,7 @@ class WebGenerator:
         
         for _ in range(max_length):
             logits, _ = self.model(input_ids)
-            logits = logits[:, -1, :] / temperature
+            logits = logits[:, -1, :].float() / temperature
             
             # Apply repetition penalty to break infinite loops
             if repetition_penalty != 1.0:
