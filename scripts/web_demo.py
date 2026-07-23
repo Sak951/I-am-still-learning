@@ -19,22 +19,26 @@ class WebGenerator:
         
         if checkpoint_path.startswith("http://") or checkpoint_path.startswith("https://"):
             import urllib.request
-            import io
+            local_dir = "checkpoints"
+            os.makedirs(local_dir, exist_ok=True)
+            local_path = os.path.join(local_dir, "downloaded_model.pt")
             
-            print(f"Downloading checkpoint from {checkpoint_path} directly into memory...")
+            print(f"Downloading checkpoint from {checkpoint_path} to {local_path} in chunks...")
             req = urllib.request.Request(checkpoint_path)
             hf_token = os.environ.get("HF_TOKEN")
             if hf_token:
                 req.add_header("Authorization", f"Bearer {hf_token}")
                 
-            with urllib.request.urlopen(req) as response:
-                buffer = io.BytesIO(response.read())
-                
+            with urllib.request.urlopen(req) as response, open(local_path, 'wb') as out_file:
+                while True:
+                    chunk = response.read(1024 * 1024)  # 1MB chunks
+                    if not chunk:
+                        break
+                    out_file.write(chunk)
+                    
             print("Download completed. Loading checkpoint...")
-            checkpoint = torch.load(buffer, map_location='cpu', weights_only=False)
-            del buffer
-            import gc
-            gc.collect()
+            checkpoint = torch.load(local_path, map_location='cpu', weights_only=False)
+            checkpoint_path = local_path
         else:
             print(f"Loading model from {checkpoint_path}...")
             checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
@@ -58,6 +62,14 @@ class WebGenerator:
         self.model.load_state_dict(state_dict)
         self.model = self.model.to(device)
         self.model.eval()
+        
+        # Delete downloaded file immediately to free RAM overlay page cache!
+        if checkpoint_path.endswith("downloaded_model.pt") and os.path.exists(checkpoint_path):
+            try:
+                os.remove(checkpoint_path)
+                print("Deleted downloaded checkpoint file to free RAM page cache.")
+            except Exception as e:
+                print(f"Failed to delete checkpoint file: {e}")
         
         # Free memory immediately
         del state_dict
