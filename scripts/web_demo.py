@@ -110,15 +110,21 @@ class WebGenerator:
         from src.model.transformer import ToyLLM
         from src.utils.tokenizer import SimpleTokenizer
         if device == 'cpu':
-            print("Converting weights to bfloat16 for CPU memory savings...")
+            print("Processing weights for CPU memory optimization...")
             for k in list(state_dict.keys()):
                 if state_dict[k].dtype == torch.float32:
-                    # clone() ensures we allocate clean RAM for the bfloat16 weights
                     state_dict[k] = state_dict[k].to(torch.bfloat16).clone()
+                else:
+                    state_dict[k] = state_dict[k].clone()
         
-        self.model = ToyLLM(self.config)
+        # Set default dtype to bfloat16 on CPU during instantiation to avoid float32 allocation spike
         if device == 'cpu':
-            self.model = self.model.to(dtype=torch.bfloat16)
+            torch.set_default_dtype(torch.bfloat16)
+            
+        self.model = ToyLLM(self.config)
+        
+        if device == 'cpu':
+            torch.set_default_dtype(torch.float32)
             
         self.model.load_state_dict(state_dict)
         self.model = self.model.to(device)
