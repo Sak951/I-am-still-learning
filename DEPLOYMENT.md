@@ -23,7 +23,7 @@ Because model checkpoints are too large for GitHub (over 300MB) and are excluded
    ```
 2. Run the provided upload script to convert and push your best model weights (`checkpoints/best_model.pt`) to your Hugging Face repository (`Sak2004/I-am-still-learning`):
    ```bash
-   python scripts/upload_to_hub.py --checkpoint checkpoints/best_model.pt --model_name I-am-still-learning --username Sak2004
+   python scripts/upload_to_hub.py --checkpoint checkpoints/best_model.pt --model-name I-am-still-learning --username Sak2004
    ```
 3. Once uploaded, copy the direct download link for the model weights file (usually `pytorch_model.bin`). The link format will look like:
    `https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/pytorch_model.bin`
