@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ generated_text: data.generated_text });
   } catch (err: any) {
     return NextResponse.json(
-      { error: `Inference backend offline. Launch with: python scripts/web_demo.py --checkpoint <path>` },
+      { error: `Inference backend offline: ${err.message || err}` },
       { status: 503 }
     );
   }
