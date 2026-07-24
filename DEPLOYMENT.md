@@ -55,17 +55,18 @@ Both services will be online, linked, and ready for you to chat with your model!
 
 ---
 
-## Alternative: Deploy Backend on Hugging Face Spaces (16GB RAM Free CPU Tier)
+## Alternative: Deploy Backend on Hugging Face Spaces (16GB RAM Free CPU Tier, No Card Required)
 
-If you want more RAM (16GB vs Render's 512MB) for faster and more stable model loading, you can host the Python backend on Hugging Face Spaces and connect your Render frontend to it.
+If you want more RAM (16GB vs Render's 512MB) for faster and more stable model loading, you can host the Python backend on Hugging Face Spaces and connect your Render frontend to it. This uses the **Gradio SDK** as a runner so it is 100% free and does **not** require credit card verification.
 
 ### Step A: Create the Hugging Face Space
 1. Go to [Hugging Face](https://huggingface.co/) and click **New Space**.
 2. Name your Space (e.g. `learn-model-backend`).
-3. Select **Docker** as the SDK (instead of Gradio/Streamlit).
-4. Select the **Blank** template.
-5. Set visibility to **Public** or **Private** (we recommend Public so your frontend can query it).
-6. Click **Create Space**.
+3. Select **Gradio** as the SDK (instead of Docker).
+4. Choose the **Blank** template.
+5. Set Space hardware to **CPU Basic (Free)**.
+6. Set visibility to **Public** or **Private** (we recommend Public so your frontend can query it).
+7. Click **Create Space**.
 
 ### Step B: Sync your Code
 Hugging Face will provide a Git URL for the Space repository (e.g., `https://huggingface.co/spaces/Sak2004/learn-model-backend`).
@@ -73,7 +74,7 @@ Hugging Face will provide a Git URL for the Space repository (e.g., `https://hug
    ```bash
    git remote add hf https://huggingface.co/spaces/Sak2004/learn-model-backend
    ```
-2. Push your main branch to the Hugging Face Space (this uploads the Dockerfile and triggers the container build):
+2. Push your main branch to the Hugging Face Space (this uploads `app.py` and triggers the server build):
    ```bash
    git push hf main --force
    ```
