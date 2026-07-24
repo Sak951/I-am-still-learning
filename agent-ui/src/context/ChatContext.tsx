@@ -124,7 +124,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [activeSessionId, setActiveSessionId] = useState<string>("");
   const [activeAgent, setActiveAgent] = useState<string>("Hermes Core");
   const [activeWorkspace, setActiveWorkspace] = useState<string>("Personal Sandbox");
-  const [selectedModel, setSelectedModel] = useState<string>("i-still-learning");
+  const [selectedModel, setSelectedModel] = useState<string>("i-am-still-learning");
   const [temperature, setTemperature] = useState<number>(0.4);
   const [deepThink, setDeepThink] = useState<boolean>(true);
   const [webSearch, setWebSearch] = useState<boolean>(false);
@@ -468,8 +468,8 @@ What should we construct or index next?`,
     ]);
 
     // Dispatch inference call immediately in the background
-    const fetchModelResponse = async (): Promise<{ content: string; source: "local" | "mock" }> => {
-      if (selectedModel !== "i-still-learning") {
+    const fetchModelResponse = async (): Promise<{ content: string; source: "local" | "mock"; errorMsg?: string }> => {
+      if (selectedModel !== "i-am-still-learning") {
         return { content: getSimulatedResponse(content).content, source: "mock" };
       }
       
@@ -497,9 +497,13 @@ What should we construct or index next?`,
         }
         
         return { content: data.generated_text, source: "local" };
-      } catch (e) {
+      } catch (e: any) {
         console.warn("Using simulation fallback. Flask backend offline.", e);
-        return { content: getSimulatedResponse(content).content, source: "mock" };
+        return { 
+          content: getSimulatedResponse(content).content, 
+          source: "mock",
+          errorMsg: e.message || String(e)
+        };
       }
     };
 
@@ -528,7 +532,7 @@ What should we construct or index next?`,
         clearInterval(intervalTimer);
         
         // Wait for LLM backend response to complete
-        responsePromise.then(({ content: modelReply, source }) => {
+        responsePromise.then(({ content: modelReply, source, errorMsg }) => {
           setTimelineSteps(prev => prev.map(s => s.id === "t6" ? { ...s, status: "completed", duration: "410ms" } : s.id === "t7" ? { ...s, status: "running" } : s));
           setExecutionLogs(prev => [...prev, { 
             id: "l7", 
@@ -538,8 +542,8 @@ What should we construct or index next?`,
           }]);
           
           if (source === "mock") {
-            if (selectedModel === "i-still-learning") {
-              addToast("Model server offline", "Ensure python scripts/web_demo.py is running on port 5000.", "warning");
+            if (selectedModel === "i-am-still-learning") {
+              addToast("Model server offline", errorMsg || "Ensure python scripts/web_demo.py is running on port 5000.", "warning");
             }
           } else {
             addToast("Generation Success", "Received text from ToyLLM.", "success");

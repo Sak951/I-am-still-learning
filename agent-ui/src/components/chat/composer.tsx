@@ -246,7 +246,7 @@ export default function Composer() {
                       Model Hyperparameters
                     </div>
                     <div className="px-1 mt-1 space-y-1">
-                      {["i-still-learning"].map(m => (
+                      {["i-am-still-learning"].map(m => (
                         <button
                           key={m}
                           onClick={() => {
