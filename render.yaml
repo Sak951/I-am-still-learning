@@ -33,4 +33,4 @@ services:
         fromService:
           type: web
           name: learn-model-backend
-          property: host
+          property: url
