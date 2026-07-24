@@ -201,14 +201,16 @@ class WebGenerator:
         
         print(f"Model loaded with {self.model.get_num_params():,} parameters")
     
-    def generate(self, prompt, max_length=150, temperature=0.8, top_k=50, top_p=0.95, repetition_penalty=1.25):
+    def generate(self, prompt, max_length=50, temperature=0.8, top_k=50, top_p=0.95, repetition_penalty=1.25):
         if self.is_onnx:
             import numpy as np
             input_ids = self.tokenizer.encode(prompt)
+            # Safe context boundary
+            block_size = getattr(self, "config", None).block_size if hasattr(self, "config") and self.config else 256
             
             for _ in range(max_length):
-                # Shape expected: [batch_size, seq_len]
-                inp = np.array([input_ids], dtype=np.int64)
+                # Shape expected: [batch_size, seq_len] (keep only last block_size tokens)
+                inp = np.array([input_ids[-block_size:]], dtype=np.int64)
                 outputs = self.session.run(None, {"input_ids": inp})
                 # Slice last logits: shape [vocab_size]
                 logits = outputs[0][0, -1, :].astype(np.float64) / temperature
@@ -448,7 +450,7 @@ HTML_TEMPLATE = '''
                 </div>
                 <div class="control-group">
                     <label>Max Length:</label>
-                    <input type="number" id="max-length" min="50" max="300" value="150">
+                    <input type="number" id="max-length" min="10" max="100" value="50">
                 </div>
                 <div class="control-group">
                     <label>Top-K:</label>
@@ -620,7 +622,7 @@ def generate():
             return jsonify({'error': 'No prompt provided'}), 400
         
         temperature = data.get('temperature', 0.8)
-        max_length = data.get('max_length', 150)
+        max_length = min(int(data.get('max_length', 50)), 100)
         top_k = data.get('top_k', 50)
         top_p = data.get('top_p', 0.95)
         repetition_penalty = data.get('repetition_penalty', 1.25)
