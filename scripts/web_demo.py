@@ -561,6 +561,8 @@ HTML_TEMPLATE = '''
 import threading
 
 LAST_ERROR = None
+loader_lock = threading.Lock()
+loader_started = False
 
 def load_generator_bg(checkpoint_path, device):
     global LAST_ERROR
@@ -574,25 +576,34 @@ def load_generator_bg(checkpoint_path, device):
         LAST_ERROR = f"Error: {e}\nTraceback:\n{traceback.format_exc()}"
         print(f"Error loading generator in background: {LAST_ERROR}")
 
-# Auto-initialize if running under WSGI (like Gunicorn)
-env_checkpoint = os.environ.get("CHECKPOINT_PATH")
-if env_checkpoint:
-    try:
-        import torch
-        has_cuda = torch.cuda.is_available()
-    except ImportError:
-        has_cuda = False
-    device = "cuda" if has_cuda else "cpu"
-    
-    # Run initialization in a background thread to prevent Gunicorn worker timeout
-    threading.Thread(target=load_generator_bg, args=(env_checkpoint, device), daemon=True).start()
+def start_background_loader():
+    global loader_started
+    with loader_lock:
+        if loader_started:
+            return
+        
+        env_checkpoint = os.environ.get("CHECKPOINT_PATH")
+        if env_checkpoint:
+            try:
+                import torch
+                has_cuda = torch.cuda.is_available()
+            except ImportError:
+                has_cuda = False
+            device = "cuda" if has_cuda else "cpu"
+            
+            # Start background thread inside the active request process
+            print("Received request. Starting background loader thread...")
+            threading.Thread(target=load_generator_bg, args=(env_checkpoint, device), daemon=True).start()
+            loader_started = True
 
 @app.route('/')
 def home():
+    start_background_loader()
     return render_template_string(HTML_TEMPLATE)
 
 @app.route('/generate', methods=['POST'])
 def generate():
+    start_background_loader()
     try:
         generator = app.config.get('GENERATOR')
         if generator is None:
@@ -631,6 +642,7 @@ def generate():
         
 @app.route('/debug', methods=['GET'])
 def debug():
+    start_background_loader()
     generator = app.config.get('GENERATOR')
     return jsonify({
         'pid': os.getpid(),
@@ -644,6 +656,7 @@ def debug():
 
 @app.route('/health', methods=['GET'])
 def health():
+    start_background_loader()
     generator = app.config.get('GENERATOR')
     is_loaded = False
     if generator is not None:
