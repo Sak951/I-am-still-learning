@@ -640,20 +640,6 @@ def generate():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
-@app.route('/debug', methods=['GET'])
-def debug():
-    start_background_loader()
-    generator = app.config.get('GENERATOR')
-    return jsonify({
-        'pid': os.getpid(),
-        'app_id': id(app),
-        'has_generator': generator is not None,
-        'generator_class': str(type(generator)) if generator is not None else None,
-        'config_keys': list(app.config.keys()),
-        'checkpoint_path': os.environ.get("CHECKPOINT_PATH"),
-        'last_error': LAST_ERROR
-    })
-
 @app.route('/health', methods=['GET'])
 def health():
     start_background_loader()
