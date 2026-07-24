@@ -158,9 +158,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         {
           id: "m1",
           role: "assistant",
-          content: "Hello! I am **I Still Learning** agent. I've initialized a secure workspace context. How can I help you construct or optimize today?",
+          content: "Hello! I am **I-am-still-learning** agent. I've initialized a secure workspace context. How can I help you construct or optimize today?",
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          modelUsed: "i-still-learning",
+          modelUsed: "i-am-still-learning",
           tokensUsed: 42,
           cost: 0.00021,
         }
@@ -251,7 +251,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     // Greeting override
     if (text === "hi" || text === "hello" || text === "hey" || text.startsWith("hello") || text.startsWith("hi ")) {
       return {
-        content: `Hello! I am your custom agent model, **I Still Learning**. I've successfully initialized our secure workspace sandbox. 
+        content: `Hello! I am your custom agent model, **I-am-still-learning**. I've successfully initialized our secure workspace sandbox. 
 
 What task or script should we construct today? (You can ask me to write **code**, render a **mermaid diagram**, or show a comparison **table** to see my rich UI components in action!)`,
         hasMermaid: false,
@@ -310,7 +310,7 @@ You can copy this layout directly or export it as an SVG.`,
 
 | Model Indicator | Avg Response (ms) | Tokens / Request | Precision Score | Cost / 1M Input |
 | :--- | :---: | :---: | :---: | :---: |
-| **I Still Learning** | 560ms | 3,100 | 95.8% | $0.25 |
+| **I-am-still-learning** | 560ms | 3,100 | 95.8% | $0.25 |
 | **Hermes Core** | 840ms | 4,200 | 98.4% | $2.50 |
 | **GPT-4o Mini** | 420ms | 1,800 | 92.1% | $0.15 |
 | **Claude Sonnet** | 1,220ms | 5,500 | 99.1% | $3.00 |

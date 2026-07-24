@@ -8,6 +8,16 @@ export async function POST(request: Request) {
       backendUrl = `http://${backendUrl}`;
     }
     
+    // Support Render internal DNS routing on port 10000
+    try {
+      const urlObj = new URL(backendUrl);
+      if (!urlObj.port && !urlObj.hostname.includes(".") && urlObj.hostname !== "localhost") {
+        backendUrl = `${backendUrl}:10000`;
+      }
+    } catch (e) {
+      // Fallback on parsing error
+    }
+    
     // Proxy request to Flask web_demo.py server
     const response = await fetch(`${backendUrl}/generate`, {
       method: "POST",

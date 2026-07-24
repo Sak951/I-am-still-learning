@@ -25,7 +25,7 @@ const dailyData = [
 ];
 
 const modelSplit = [
-  { name: "I Still Learning", percentage: 50, fill: "#7C3AED" },
+  { name: "I-am-still-learning", percentage: 50, fill: "#7C3AED" },
   { name: "Hermes Core", percentage: 25, fill: "#3B82F6" },
   { name: "GPT-4o Mini", percentage: 15, fill: "#10B981" },
   { name: "Claude Sonnet", percentage: 8, fill: "#F59E0B" },
