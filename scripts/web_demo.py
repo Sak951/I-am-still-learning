@@ -561,10 +561,10 @@ HTML_TEMPLATE = '''
 import threading
 
 def load_generator_bg(checkpoint_path, device):
-    global generator
     try:
         print(f"Starting background generator loading for checkpoint: {checkpoint_path}...")
-        generator = WebGenerator(checkpoint_path, device)
+        gen = WebGenerator(checkpoint_path, device)
+        app.config['GENERATOR'] = gen
         print("Generator successfully loaded in background.")
     except Exception as e:
         print(f"Error loading generator in background: {e}")
@@ -589,6 +589,7 @@ def home():
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
+        generator = app.config.get('GENERATOR')
         if generator is None:
             return jsonify({'error': 'Model is still loading in the background. Please retry in a few seconds.'}), 503
             
@@ -625,6 +626,7 @@ def generate():
 
 @app.route('/health', methods=['GET'])
 def health():
+    generator = app.config.get('GENERATOR')
     is_loaded = False
     if generator is not None:
         if generator.is_onnx:
@@ -644,14 +646,13 @@ def main():
     parser.add_argument('--host', type=str, default='127.0.0.1')
     args = parser.parse_args()
     
-    global generator
     try:
         import torch
         has_cuda = torch.cuda.is_available()
     except ImportError:
         has_cuda = False
     device = "cuda" if has_cuda else "cpu"
-    generator = WebGenerator(args.checkpoint, device)
+    app.config['GENERATOR'] = WebGenerator(args.checkpoint, device)
     
     print(f"\n✨ Web demo running at http://{args.host}:{args.port}")
     print("Press CTRL+C to stop\n")
