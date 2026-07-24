@@ -49,7 +49,14 @@ class WebGenerator:
             
             print(f"Loading ONNX Session from {checkpoint_path}...")
             import onnxruntime as ort
-            self.session = ort.InferenceSession(checkpoint_path, providers=['CPUExecutionProvider'])
+            
+            # Restrict threads to 1 to prevent context-switching overhead on throttled CPUs
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = 1
+            opts.inter_op_num_threads = 1
+            opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            
+            self.session = ort.InferenceSession(checkpoint_path, sess_options=opts, providers=['CPUExecutionProvider'])
             print("ONNX Session loaded successfully.")
             return
             
