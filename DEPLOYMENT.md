@@ -12,21 +12,25 @@ This guide walks you through deploying the **I-am-still-learning** 124M paramete
 
 ---
 
-## Step 1: Upload Model Weights to Hugging Face
+## Step 1: Export and Upload Quantized ONNX Model to Hugging Face
 
-Because model checkpoints are too large for GitHub (over 300MB) and are excluded by `.gitignore`, you should upload your trained weights to the Hugging Face Hub so Render can download them dynamically during startup.
+To run the model backend within Render's Free tier limit (512MB RAM), we export the PyTorch model to ONNX format and dynamically quantize it to 8-bit integers (INT8). This reduces the model size from 496MB to **155MB** and cuts RAM usage during inference from **997MB** to **220MB**!
 
-1. Ensure you have the `huggingface_hub` package installed and login via CLI:
+We have already generated the quantized model (`checkpoints/model_quant.onnx`) and uploaded it to your Hugging Face Hub repository (`Sak2004/I-am-still-learning`).
+
+If you ever need to recreate or re-upload the quantized model:
+1. Run the local export script to generate `checkpoints/model.onnx`:
    ```bash
-   pip install huggingface_hub
-   huggingface-cli login
+   python scratch/test_onnx.py
    ```
-2. Run the provided upload script to convert and push your best model weights (`checkpoints/best_model.pt`) to your Hugging Face repository (`Sak2004/I-am-still-learning`):
+2. Run the dynamic quantization script to generate `checkpoints/model_quant.onnx`:
    ```bash
-   python scripts/upload_to_hub.py --checkpoint checkpoints/best_model.pt --model-name I-am-still-learning --username Sak2004
+   python scratch/quantize.py
    ```
-3. Once uploaded, copy the direct download link for the model weights file (usually `pytorch_model.bin`). The link format will look like:
-   `https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/pytorch_model.bin`
+3. Upload the quantized model to your Hugging Face Hub repository:
+   ```bash
+   python scripts/upload_onnx.py --token <YOUR_HF_TOKEN>
+   ```
 
 ---
 
@@ -40,15 +44,15 @@ Render's Blueprints read the `render.yaml` file in your repository root and auto
 4. Name your Blueprint instance (e.g. `learn-os-deployment`).
 5. Under **Environment Variables**, confirm or edit the `CHECKPOINT_PATH` and optionally set `HF_TOKEN`:
    * **Key**: `CHECKPOINT_PATH`
-   * **Value**: Set this to the Hugging Face resolve URL copied in Step 1 (e.g., `https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/pytorch_model.bin`).
+   * **Value**: `https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/model_quant.onnx`
    * **Key**: `HF_TOKEN` (**Required if your Hugging Face repository is Private**)
-   * **Value**: Your Hugging Face Read-only Access Token (generate one from your Hugging Face Account Settings > Access Tokens).
+   * **Value**: Your Hugging Face Read-only Access Token.
 6. Click **Approve** / **Deploy**.
 
 ---
 
 ## How it works:
-* **Model Backend (`learn-model-backend`)**: Render builds a Python container, downloads the weight checkpoint from the `CHECKPOINT_PATH` URL into a local directory, and boots a Gunicorn WSGI server running the model inference engine.
+* **Model Backend (`learn-model-backend`)**: Render builds a Python container, downloads the quantized ONNX model from the `CHECKPOINT_PATH` URL, and boots a Gunicorn WSGI server. Since it uses `onnxruntime` instead of PyTorch, it loads the model and runs text generation using less than **200MB of RAM**!
 * **Next.js Frontend (`learn-frontend`)**: Render builds the Node.js package inside `agent-ui`, automatically fetches the internal network host URL from the model service, binds it to the `BACKEND_URL` environment variable, and starts the Next.js server.
 
 Both services will be online, linked, and ready for you to chat with your model!

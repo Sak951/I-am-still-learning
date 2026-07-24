@@ -1,12 +1,10 @@
 # scripts/web_demo.py
-import torch
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, request, jsonify, render_template_string
 import argparse
-import torch.nn.functional as F
 
 app = Flask(__name__)
 
@@ -14,7 +12,49 @@ app = Flask(__name__)
 generator = None
 
 class WebGenerator:
-    def __init__(self, checkpoint_path, device='cuda'):
+    def __init__(self, checkpoint_path, device='cpu'):
+        self.device = device
+        self.tokenizer = None
+        
+        from src.utils.tokenizer import SimpleTokenizer
+        self.tokenizer = SimpleTokenizer(tokenizer_type="gpt2")
+        
+        # Check if the checkpoint is an ONNX model
+        self.is_onnx = "model_quant.onnx" in checkpoint_path or checkpoint_path.endswith(".onnx")
+        
+        if self.is_onnx:
+            print("ONNX model detected.")
+            if checkpoint_path.startswith("http://") or checkpoint_path.startswith("https://"):
+                import urllib.request
+                local_dir = "checkpoints"
+                os.makedirs(local_dir, exist_ok=True)
+                local_path = os.path.join(local_dir, "downloaded_model.onnx")
+                
+                print(f"Downloading ONNX checkpoint from {checkpoint_path} to {local_path} in chunks...")
+                req = urllib.request.Request(checkpoint_path)
+                hf_token = os.environ.get("HF_TOKEN")
+                if hf_token:
+                    req.add_header("Authorization", f"Bearer {hf_token}")
+                    
+                with urllib.request.urlopen(req) as response, open(local_path, 'wb') as out_file:
+                    while True:
+                        chunk = response.read(1024 * 1024)  # 1MB chunks
+                        if not chunk:
+                            break
+                        out_file.write(chunk)
+                print("Download completed.")
+                checkpoint_path = local_path
+            
+            print(f"Loading ONNX Session from {checkpoint_path}...")
+            import onnxruntime as ort
+            self.session = ort.InferenceSession(checkpoint_path, providers=['CPUExecutionProvider'])
+            print("ONNX Session loaded successfully.")
+            return
+            
+        # Below is PyTorch-specific loading logic (only imported if not ONNX)
+        import torch
+        from src.model.transformer import ToyLLM
+        
         checkpoint = None
         
         if checkpoint_path.startswith("http://") or checkpoint_path.startswith("https://"):
@@ -107,8 +147,6 @@ class WebGenerator:
                     print(f"Failed to load fallback config: {fallback_err}")
                     raise ValueError("Could not load configuration for weights-only model.")
         
-        from src.model.transformer import ToyLLM
-        from src.utils.tokenizer import SimpleTokenizer
         # Set default dtype to bfloat16 on CPU during instantiation to avoid float32 allocation spike
         if device == 'cpu':
             torch.set_default_dtype(torch.bfloat16)
@@ -161,50 +199,106 @@ class WebGenerator:
         import gc
         gc.collect()
         
-        self.tokenizer = SimpleTokenizer(tokenizer_type="gpt2")
-        self.device = device
-        
         print(f"Model loaded with {self.model.get_num_params():,} parameters")
     
-    @torch.no_grad()
     def generate(self, prompt, max_length=150, temperature=0.8, top_k=50, top_p=0.95, repetition_penalty=1.25):
-        input_ids = torch.tensor([self.tokenizer.encode(prompt)]).to(self.device)
-        
-        for _ in range(max_length):
-            logits, _ = self.model(input_ids)
-            logits = logits[:, -1, :].float() / temperature
+        if self.is_onnx:
+            import numpy as np
+            input_ids = self.tokenizer.encode(prompt)
             
-            # Apply repetition penalty to break infinite loops
-            if repetition_penalty != 1.0:
-                generated_tokens = set(input_ids[0].tolist())
-                for token_id in generated_tokens:
-                    val = logits[0, token_id].item()
-                    if val > 0:
-                        logits[0, token_id] /= repetition_penalty
-                    else:
-                        logits[0, token_id] *= repetition_penalty
+            for _ in range(max_length):
+                # Shape expected: [batch_size, seq_len]
+                inp = np.array([input_ids], dtype=np.int64)
+                outputs = self.session.run(None, {"input_ids": inp})
+                # Slice last logits: shape [vocab_size]
+                logits = outputs[0][0, -1, :].astype(np.float64) / temperature
+                
+                # Apply repetition penalty
+                if repetition_penalty != 1.0:
+                    generated_tokens = set(input_ids)
+                    for token_id in generated_tokens:
+                        val = logits[token_id]
+                        if val > 0:
+                            logits[token_id] /= repetition_penalty
+                        else:
+                            logits[token_id] *= repetition_penalty
+                            
+                # Apply Top-K filtering
+                if top_k > 0:
+                    top_k_indices = np.argpartition(logits, -top_k)[-top_k:]
+                    min_val = logits[top_k_indices].min()
+                    logits[logits < min_val] = float('-inf')
+                    
+                # Apply Top-P (Nucleus) filtering
+                if top_p < 1.0:
+                    sorted_indices = np.argsort(logits)[::-1]
+                    sorted_logits = logits[sorted_indices]
+                    
+                    # Compute softmax probabilities
+                    exp_logits = np.exp(sorted_logits - np.max(sorted_logits))
+                    probs = exp_logits / np.sum(exp_logits)
+                    cumulative_probs = np.cumsum(probs)
+                    
+                    idx_to_remove = cumulative_probs > top_p
+                    idx_to_remove[1:] = idx_to_remove[:-1]
+                    idx_to_remove[0] = False
+                    
+                    logits[sorted_indices[idx_to_remove]] = float('-inf')
+                    
+                # Final Softmax
+                exp_logits = np.exp(logits - np.max(logits))
+                probs = exp_logits / np.sum(exp_logits)
+                
+                # Sample next token
+                next_token = np.random.choice(len(probs), p=probs)
+                input_ids.append(int(next_token))
+                
+                if next_token == self.tokenizer.eos_token_id:
+                    break
+                    
+            return self.tokenizer.decode(input_ids)
             
-            if top_k > 0:
-                indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
-                logits[indices_to_remove] = float('-inf')
+        else:
+            import torch
+            import torch.nn.functional as F
+            input_ids = torch.tensor([self.tokenizer.encode(prompt)]).to(self.device)
             
-            if top_p < 1.0:
-                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-                sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                sorted_indices_to_remove[..., 0] = 0
-                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
-                logits[indices_to_remove] = float('-inf')
-            
-            probs = F.softmax(logits, dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)
-            input_ids = torch.cat([input_ids, next_token], dim=1)
-            
-            if next_token.item() == self.tokenizer.eos_token_id:
-                break
-        
-        return self.tokenizer.decode(input_ids[0].tolist())
+            with torch.no_grad():
+                for _ in range(max_length):
+                    logits, _ = self.model(input_ids)
+                    logits = logits[:, -1, :].float() / temperature
+                    
+                    # Apply repetition penalty to break infinite loops
+                    if repetition_penalty != 1.0:
+                        generated_tokens = set(input_ids[0].tolist())
+                        for token_id in generated_tokens:
+                            val = logits[0, token_id].item()
+                            if val > 0:
+                                logits[0, token_id] /= repetition_penalty
+                            else:
+                                logits[0, token_id] *= repetition_penalty
+                    
+                    if top_k > 0:
+                        indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+                        logits[indices_to_remove] = float('-inf')
+                    
+                    if top_p < 1.0:
+                        sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+                        cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                        sorted_indices_to_remove = cumulative_probs > top_p
+                        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                        sorted_indices_to_remove[..., 0] = 0
+                        indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                        logits[indices_to_remove] = float('-inf')
+                    
+                    probs = F.softmax(logits, dim=-1)
+                    next_token = torch.multinomial(probs, num_samples=1)
+                    input_ids = torch.cat([input_ids, next_token], dim=1)
+                    
+                    if next_token.item() == self.tokenizer.eos_token_id:
+                        break
+                
+            return self.tokenizer.decode(input_ids[0].tolist())
 
 # HTML Template
 HTML_TEMPLATE = '''
@@ -467,7 +561,12 @@ HTML_TEMPLATE = '''
 # Auto-initialize if running under WSGI (like Gunicorn)
 env_checkpoint = os.environ.get("CHECKPOINT_PATH")
 if env_checkpoint:
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    try:
+        import torch
+        has_cuda = torch.cuda.is_available()
+    except ImportError:
+        has_cuda = False
+    device = "cuda" if has_cuda else "cpu"
     generator = WebGenerator(env_checkpoint, device)
 
 @app.route('/')
@@ -520,7 +619,12 @@ def main():
     args = parser.parse_args()
     
     global generator
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    try:
+        import torch
+        has_cuda = torch.cuda.is_available()
+    except ImportError:
+        has_cuda = False
+    device = "cuda" if has_cuda else "cpu"
     generator = WebGenerator(args.checkpoint, device)
     
     print(f"\n✨ Web demo running at http://{args.host}:{args.port}")
