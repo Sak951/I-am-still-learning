@@ -35,7 +35,7 @@ export default function MessageList() {
               </div>
               <div className="flex flex-col max-w-[85%] items-start">
                 <span className="text-[10px] text-[var(--text-inactive)] mb-1 font-medium">
-                  Hermes Agent is preparing analysis...
+                  I-am-still-learning is preparing analysis...
                 </span>
                 <div className="px-4 py-3 rounded-2xl rounded-tl-none border border-[var(--border-muted)] bg-[var(--bg-card)]/50 text-xs">
                   <div className="typing-dots flex items-center gap-1 py-1">

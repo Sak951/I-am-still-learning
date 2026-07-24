@@ -148,7 +148,7 @@ export default function MessageItem({ message }: MessageItemProps) {
         {/* User / Agent Header tag */}
         <div className="flex items-center gap-2 mb-1">
           <span className="text-[10px] font-semibold text-[var(--text-muted)]">
-            {isUser ? "You" : message.modelUsed || "Hermes Agent"}
+            {isUser ? "You" : message.modelUsed || "I-am-still-learning"}
           </span>
           <span className="text-[9px] text-[var(--text-inactive)]">{message.timestamp}</span>
           {!isUser && message.thinkingTime && (
