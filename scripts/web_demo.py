@@ -558,6 +558,17 @@ HTML_TEMPLATE = '''
 </html>
 '''
 
+import threading
+
+def load_generator_bg(checkpoint_path, device):
+    global generator
+    try:
+        print(f"Starting background generator loading for checkpoint: {checkpoint_path}...")
+        generator = WebGenerator(checkpoint_path, device)
+        print("Generator successfully loaded in background.")
+    except Exception as e:
+        print(f"Error loading generator in background: {e}")
+
 # Auto-initialize if running under WSGI (like Gunicorn)
 env_checkpoint = os.environ.get("CHECKPOINT_PATH")
 if env_checkpoint:
@@ -567,7 +578,9 @@ if env_checkpoint:
     except ImportError:
         has_cuda = False
     device = "cuda" if has_cuda else "cpu"
-    generator = WebGenerator(env_checkpoint, device)
+    
+    # Run initialization in a background thread to prevent Gunicorn worker timeout
+    threading.Thread(target=load_generator_bg, args=(env_checkpoint, device), daemon=True).start()
 
 @app.route('/')
 def home():
@@ -576,6 +589,9 @@ def home():
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
+        if generator is None:
+            return jsonify({'error': 'Model is still loading in the background. Please retry in a few seconds.'}), 503
+            
         # Get JSON data
         data = request.get_json()
         
@@ -609,7 +625,17 @@ def generate():
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'healthy', 'model_loaded': generator is not None})
+    is_loaded = False
+    if generator is not None:
+        if generator.is_onnx:
+            is_loaded = hasattr(generator, 'session') and generator.session is not None
+        else:
+            is_loaded = hasattr(generator, 'model') and generator.model is not None
+            
+    return jsonify({
+        'status': 'healthy',
+        'model_loaded': is_loaded
+    })
 
 def main():
     parser = argparse.ArgumentParser()
