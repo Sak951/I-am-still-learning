@@ -607,9 +607,15 @@ def home():
 def generate():
     start_background_loader()
     try:
+        # Wait for background model download/loading to complete (usually takes 15-20s on first spin-up)
+        import time
+        wait_start = time.time()
+        while app.config.get('GENERATOR') is None:
+            if time.time() - wait_start > 45:
+                return jsonify({'error': 'Model loading timed out. Please try again in a few seconds.'}), 503
+            time.sleep(0.5)
+            
         generator = app.config.get('GENERATOR')
-        if generator is None:
-            return jsonify({'error': 'Model is still loading in the background. Please retry in a few seconds.'}), 503
             
         # Get JSON data
         data = request.get_json()
