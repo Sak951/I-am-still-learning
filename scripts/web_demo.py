@@ -109,14 +109,6 @@ class WebGenerator:
         
         from src.model.transformer import ToyLLM
         from src.utils.tokenizer import SimpleTokenizer
-        if device == 'cpu':
-            print("Processing weights for CPU memory optimization...")
-            for k in list(state_dict.keys()):
-                if state_dict[k].dtype == torch.float32:
-                    state_dict[k] = state_dict[k].to(torch.bfloat16).clone()
-                else:
-                    state_dict[k] = state_dict[k].clone()
-        
         # Set default dtype to bfloat16 on CPU during instantiation to avoid float32 allocation spike
         if device == 'cpu':
             torch.set_default_dtype(torch.bfloat16)
@@ -126,7 +118,32 @@ class WebGenerator:
         if device == 'cpu':
             torch.set_default_dtype(torch.float32)
             
-        self.model.load_state_dict(state_dict)
+        # Pop and copy weights one-by-one in-place to avoid memory duplication
+        print("Loading weights into model layers one-by-one...")
+        with torch.no_grad():
+            # Copy Parameters
+            for name, param in list(self.model.named_parameters()):
+                if name in state_dict:
+                    val = state_dict.pop(name)
+                    if val.dtype == torch.float32:
+                        param.copy_(val.to(torch.bfloat16))
+                    else:
+                        param.copy_(val)
+                    del val
+            
+            # Copy Buffers (if any)
+            for name, buf in list(self.model.named_buffers()):
+                if name in state_dict:
+                    val = state_dict.pop(name)
+                    if val.dtype == torch.float32:
+                        buf.copy_(val.to(torch.bfloat16))
+                    else:
+                        buf.copy_(val)
+                    del val
+        
+        if len(state_dict) > 0:
+            print(f"Warning: The following keys in checkpoint were not loaded: {list(state_dict.keys())}")
+            
         self.model = self.model.to(device)
         self.model.eval()
         
