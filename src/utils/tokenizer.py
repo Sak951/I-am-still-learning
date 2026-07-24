@@ -1,5 +1,4 @@
 # src/utils/tokenizer.py
-import torch
 import tiktoken
 from typing import List, Union
 
@@ -32,8 +31,9 @@ class SimpleTokenizer:
             return self.tokenizer.encode(text)
         return self.tokenizer.encode(text, add_special_tokens=False)
     
-    def decode(self, tokens: Union[List[int], torch.Tensor]) -> str:
-        if isinstance(tokens, torch.Tensor):
+    def decode(self, tokens: Union[List[int], "torch.Tensor"]) -> str:
+        # Support torch.Tensor dynamically without importing torch at module level
+        if type(tokens).__name__ == "Tensor" or (hasattr(tokens, "tolist") and callable(tokens.tolist)):
             tokens = tokens.tolist()
         if isinstance(self.tokenizer, tiktoken.Encoding):
             return self.tokenizer.decode(tokens)
