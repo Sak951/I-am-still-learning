@@ -488,7 +488,12 @@ What should we construct or index next?`,
         });
         
         if (!res.ok) {
-          throw new Error("HTTP connection failed");
+          try {
+            const data = await res.json();
+            throw new Error(data.error || `HTTP error ${res.status}`);
+          } catch (jsonErr: any) {
+            throw new Error(jsonErr.message || `HTTP connection failed (${res.status})`);
+          }
         }
         
         const data = await res.json();
