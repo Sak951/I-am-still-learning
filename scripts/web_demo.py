@@ -560,14 +560,19 @@ HTML_TEMPLATE = '''
 
 import threading
 
+LAST_ERROR = None
+
 def load_generator_bg(checkpoint_path, device):
+    global LAST_ERROR
     try:
         print(f"Starting background generator loading for checkpoint: {checkpoint_path}...")
         gen = WebGenerator(checkpoint_path, device)
         app.config['GENERATOR'] = gen
         print("Generator successfully loaded in background.")
     except Exception as e:
-        print(f"Error loading generator in background: {e}")
+        import traceback
+        LAST_ERROR = f"Error: {e}\nTraceback:\n{traceback.format_exc()}"
+        print(f"Error loading generator in background: {LAST_ERROR}")
 
 # Auto-initialize if running under WSGI (like Gunicorn)
 env_checkpoint = os.environ.get("CHECKPOINT_PATH")
@@ -633,7 +638,8 @@ def debug():
         'has_generator': generator is not None,
         'generator_class': str(type(generator)) if generator is not None else None,
         'config_keys': list(app.config.keys()),
-        'checkpoint_path': os.environ.get("CHECKPOINT_PATH")
+        'checkpoint_path': os.environ.get("CHECKPOINT_PATH"),
+        'last_error': LAST_ERROR
     })
 
 @app.route('/health', methods=['GET'])
