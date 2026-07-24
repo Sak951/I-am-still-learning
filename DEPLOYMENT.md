@@ -52,3 +52,46 @@ Render's Blueprints read the `render.yaml` file in your repository root and auto
 * **Next.js Frontend (`learn-frontend`)**: Render builds the Node.js package inside `agent-ui`, automatically fetches the internal network host URL from the model service, binds it to the `BACKEND_URL` environment variable, and starts the Next.js server.
 
 Both services will be online, linked, and ready for you to chat with your model!
+
+---
+
+## Alternative: Deploy Backend on Hugging Face Spaces (16GB RAM Free CPU Tier)
+
+If you want more RAM (16GB vs Render's 512MB) for faster and more stable model loading, you can host the Python backend on Hugging Face Spaces and connect your Render frontend to it.
+
+### Step A: Create the Hugging Face Space
+1. Go to [Hugging Face](https://huggingface.co/) and click **New Space**.
+2. Name your Space (e.g. `learn-model-backend`).
+3. Select **Docker** as the SDK (instead of Gradio/Streamlit).
+4. Select the **Blank** template.
+5. Set visibility to **Public** or **Private** (we recommend Public so your frontend can query it).
+6. Click **Create Space**.
+
+### Step B: Sync your Code
+Hugging Face will provide a Git URL for the Space repository (e.g., `https://huggingface.co/spaces/Sak2004/learn-model-backend`).
+1. Add the Space as a git remote in your local repository terminal:
+   ```bash
+   git remote add hf https://huggingface.co/spaces/Sak2004/learn-model-backend
+   ```
+2. Push your main branch to the Hugging Face Space (this uploads the Dockerfile and triggers the container build):
+   ```bash
+   git push hf main --force
+   ```
+
+### Step C: Configure Secrets on Hugging Face
+1. In your Hugging Face Space, navigate to **Settings**.
+2. Scroll to **Variables and secrets**.
+3. Under **Repository secrets**, click **New secret** to add your Hugging Face token:
+   * **Name**: `HF_TOKEN`
+   * **Value**: Your Hugging Face read access token.
+4. Click **New secret** to define the model checkpoint URL:
+   * **Name**: `CHECKPOINT_PATH`
+   * **Value**: `https://huggingface.co/Sak2004/I-am-still-learning/resolve/main/pytorch_model.bin`
+
+### Step D: Connect Render Frontend to Hugging Face Space
+Once the Space builds and shows a green **Running** status, copy the Direct URL:
+* Direct URL format: `https://<username>-<space-name>.hf.space` (e.g. `https://sak2004-learn-model-backend.hf.space`).
+1. In your **Render Dashboard**, select your Next.js Frontend (**`learn-frontend`**).
+2. Go to **Environment**.
+3. Edit the `BACKEND_URL` environment variable value to your Hugging Face Space Direct URL.
+4. Click **Save Changes** and trigger a redeploy of the frontend!
